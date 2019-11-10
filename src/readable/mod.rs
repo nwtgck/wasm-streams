@@ -12,18 +12,26 @@ pub use into_stream::IntoStream;
 mod into_stream;
 pub mod sys;
 
-pub struct ReadableStream {
+pub struct ReadableStream<T: From<JsValue> + AsRef<JsValue> + 'static = JsValue> {
     raw: sys::ReadableStream,
-    _source: Option<JsUnderlyingSource>,
+    _source: Option<JsUnderlyingSource<T>>,
 }
 
-impl ReadableStream {
-    pub fn new(source: Box<dyn UnderlyingSource + 'static>) -> ReadableStream {
+impl<T: From<JsValue> + AsRef<JsValue> + 'static> ReadableStream<T> {
+    pub fn new(source: Box<dyn UnderlyingSource<Item=T> + 'static>) -> ReadableStream<T> {
         let source = JsUnderlyingSource::new(source);
         let raw = sys::ReadableStream::new_with_source(source.as_raw());
         ReadableStream {
             raw,
             _source: Some(source),
+        }
+    }
+
+    #[inline]
+    pub fn from_raw(raw: sys::ReadableStream) -> ReadableStream<T> {
+        ReadableStream {
+            raw,
+            _source: None,
         }
     }
 
@@ -48,7 +56,7 @@ impl ReadableStream {
         Ok(())
     }
 
-    pub fn get_reader(&mut self) -> Result<ReadableStreamDefaultReader<'_>, JsValue> {
+    pub fn get_reader(&mut self) -> Result<ReadableStreamDefaultReader<'_, T>, JsValue> {
         Ok(ReadableStreamDefaultReader {
             raw: Some(self.raw.get_reader()?),
             _stream: PhantomData,
@@ -63,20 +71,26 @@ impl ReadableStream {
     }
 }
 
-impl From<sys::ReadableStream> for ReadableStream {
-    fn from(raw: sys::ReadableStream) -> ReadableStream {
-        ReadableStream {
-            raw,
-            _source: None,
-        }
+impl From<sys::ReadableStream> for ReadableStream<JsValue> {
+    fn from(raw: sys::ReadableStream) -> ReadableStream<JsValue> {
+        ReadableStream::from_raw(raw)
     }
 }
 
-pub struct ReadableStreamDefaultController {
-    raw: sys::ReadableStreamDefaultController
+pub struct ReadableStreamDefaultController<T: AsRef<JsValue> = JsValue> {
+    raw: sys::ReadableStreamDefaultController,
+    item_type: PhantomData<T>,
 }
 
-impl ReadableStreamDefaultController {
+impl<T: AsRef<JsValue>> ReadableStreamDefaultController<T> {
+    #[inline]
+    pub fn from_raw(raw: sys::ReadableStreamDefaultController) -> ReadableStreamDefaultController<T> {
+        ReadableStreamDefaultController {
+            raw,
+            item_type: PhantomData,
+        }
+    }
+
     #[inline]
     pub fn as_raw(&self) -> &sys::ReadableStreamDefaultController {
         &self.raw
@@ -90,8 +104,8 @@ impl ReadableStreamDefaultController {
         self.raw.close()
     }
 
-    pub fn enqueue(&self, chunk: &JsValue) {
-        self.raw.enqueue(chunk)
+    pub fn enqueue(&self, chunk: &T) {
+        self.raw.enqueue(chunk.as_ref())
     }
 
     pub fn error(&self, error: &JsValue) {
@@ -99,22 +113,16 @@ impl ReadableStreamDefaultController {
     }
 }
 
-impl From<sys::ReadableStreamDefaultController> for ReadableStreamDefaultController {
-    fn from(raw: sys::ReadableStreamDefaultController) -> ReadableStreamDefaultController {
-        ReadableStreamDefaultController {
-            raw
-        }
-    }
-}
-
 #[async_trait(? Send)]
 pub trait UnderlyingSource {
-    async fn start(&mut self, controller: &ReadableStreamDefaultController) -> Result<(), JsValue> {
+    type Item: AsRef<JsValue>;
+
+    async fn start(&mut self, controller: &ReadableStreamDefaultController<Self::Item>) -> Result<(), JsValue> {
         let _ = controller;
         Ok(())
     }
 
-    async fn pull(&mut self, controller: &ReadableStreamDefaultController) -> Result<(), JsValue> {
+    async fn pull(&mut self, controller: &ReadableStreamDefaultController<Self::Item>) -> Result<(), JsValue> {
         let _ = controller;
         Ok(())
     }
@@ -125,15 +133,16 @@ pub trait UnderlyingSource {
     }
 }
 
-struct JsUnderlyingSource {
+struct JsUnderlyingSource<T: AsRef<JsValue> + 'static> {
     raw: sys::UnderlyingSource,
     start_closure: Closure<dyn FnMut(sys::ReadableStreamDefaultController) -> Promise>,
     pull_closure: Closure<dyn FnMut(sys::ReadableStreamDefaultController) -> Promise>,
     cancel_closure: Closure<dyn FnMut(JsValue) -> Promise>,
+    _item_type: PhantomData<T>,
 }
 
-impl JsUnderlyingSource {
-    pub fn new(source: Box<dyn UnderlyingSource + 'static>) -> JsUnderlyingSource {
+impl<T: AsRef<JsValue> + 'static> JsUnderlyingSource<T> {
+    pub fn new(source: Box<dyn UnderlyingSource<Item=T> + 'static>) -> JsUnderlyingSource<T> {
         let source = Rc::new(RefCell::new(source));
 
         let start_closure = {
@@ -144,7 +153,7 @@ impl JsUnderlyingSource {
                     // This mutable borrow can never panic, since the ReadableStream always
                     // queues each operation on the underlying source.
                     let mut source = source.borrow_mut();
-                    source.start(&From::from(controller)).await?;
+                    source.start(&ReadableStreamDefaultController::from_raw(controller)).await?;
                     Ok(JsValue::undefined())
                 })
             }) as Box<dyn FnMut(sys::ReadableStreamDefaultController) -> Promise>)
@@ -155,7 +164,7 @@ impl JsUnderlyingSource {
                 let source = source.clone();
                 future_to_promise(async move {
                     let mut source = source.borrow_mut();
-                    source.pull(&From::from(controller)).await?;
+                    source.pull(&ReadableStreamDefaultController::from_raw(controller)).await?;
                     Ok(JsValue::undefined())
                 })
             }) as Box<dyn FnMut(sys::ReadableStreamDefaultController) -> Promise>)
@@ -182,6 +191,7 @@ impl JsUnderlyingSource {
             start_closure,
             pull_closure,
             cancel_closure,
+            _item_type: PhantomData as PhantomData<T>,
         }
     }
 
@@ -198,12 +208,12 @@ impl JsUnderlyingSource {
     }
 }
 
-pub struct ReadableStreamDefaultReader<'stream> {
+pub struct ReadableStreamDefaultReader<'stream, T: From<JsValue> + AsRef<JsValue> + 'static = JsValue> {
     raw: Option<sys::ReadableStreamDefaultReader>,
-    _stream: PhantomData<&'stream mut ReadableStream>,
+    _stream: PhantomData<&'stream mut ReadableStream<T>>,
 }
 
-impl<'stream> ReadableStreamDefaultReader<'stream> {
+impl<'stream, T: From<JsValue> + AsRef<JsValue> + 'static> ReadableStreamDefaultReader<'stream, T> {
     #[inline]
     pub fn as_raw(&self) -> &sys::ReadableStreamDefaultReader {
         self.raw.as_ref().unwrap()
@@ -227,13 +237,13 @@ impl<'stream> ReadableStreamDefaultReader<'stream> {
         Ok(())
     }
 
-    pub async fn read(&mut self) -> Result<Option<JsValue>, JsValue> {
+    pub async fn read(&mut self) -> Result<Option<T>, JsValue> {
         let js_value = JsFuture::from(self.as_raw().read()).await?;
         let result = sys::ReadableStreamReadResult::from(js_value);
         if result.is_done() {
             Ok(None)
         } else {
-            Ok(Some(result.value()))
+            Ok(Some(T::from(result.value())))
         }
     }
 
@@ -245,12 +255,12 @@ impl<'stream> ReadableStreamDefaultReader<'stream> {
         Ok(())
     }
 
-    pub fn into_stream(self) -> IntoStream<'stream> {
+    pub fn into_stream(self) -> IntoStream<'stream, T> {
         IntoStream::new(self)
     }
 }
 
-impl Drop for ReadableStreamDefaultReader<'_> {
+impl<T: From<JsValue> + AsRef<JsValue> + 'static> Drop for ReadableStreamDefaultReader<'_, T> {
     fn drop(&mut self) {
         // TODO Error handling?
         self.release_lock().unwrap();

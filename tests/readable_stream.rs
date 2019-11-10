@@ -1,3 +1,5 @@
+use std::fmt::{Error, Formatter};
+
 use futures::future::{abortable, Aborted, join};
 use futures::stream::StreamExt;
 use pin_utils::pin_mut;
@@ -11,14 +13,41 @@ struct NoopSource;
 
 struct HelloWorldSource;
 
+#[derive(Debug, Eq, PartialEq)]
+struct JsStringWrapper {
+    value: JsValue
+}
+
+impl<'a> From<&'a str> for JsStringWrapper {
+    fn from(s: &'a str) -> JsStringWrapper {
+        JsStringWrapper { value: JsValue::from(s) }
+    }
+}
+
+impl From<JsValue> for JsStringWrapper {
+    fn from(value: JsValue) -> Self {
+        JsStringWrapper { value }
+    }
+}
+
+impl AsRef<JsValue> for JsStringWrapper {
+    fn as_ref(&self) -> &JsValue {
+        &self.value
+    }
+}
+
 #[async_trait(? Send)]
-impl UnderlyingSource for NoopSource {}
+impl UnderlyingSource for NoopSource {
+    type Item = JsValue;
+}
 
 #[async_trait(? Send)]
 impl UnderlyingSource for HelloWorldSource {
-    async fn start(&mut self, controller: &ReadableStreamDefaultController) -> Result<(), JsValue> {
-        controller.enqueue(&JsValue::from("Hello"));
-        controller.enqueue(&JsValue::from("world!"));
+    type Item = JsStringWrapper;
+
+    async fn start(&mut self, controller: &ReadableStreamDefaultController<JsStringWrapper>) -> Result<(), JsValue> {
+        controller.enqueue(&JsStringWrapper::from("Hello"));
+        controller.enqueue(&JsStringWrapper::from("world!"));
         controller.close();
         Ok(())
     }
@@ -30,8 +59,8 @@ async fn test_readable_stream_new() {
     assert!(!readable.is_locked());
 
     let mut reader = readable.get_reader().unwrap();
-    assert_eq!(reader.read().await.unwrap(), Some(JsValue::from("Hello")));
-    assert_eq!(reader.read().await.unwrap(), Some(JsValue::from("world!")));
+    assert_eq!(reader.read().await.unwrap(), Some(JsStringWrapper::from("Hello")));
+    assert_eq!(reader.read().await.unwrap(), Some(JsStringWrapper::from("world!")));
     assert_eq!(reader.read().await.unwrap(), None);
     reader.closed().await.unwrap();
 }
@@ -45,8 +74,8 @@ async fn test_readable_stream_into_stream() {
     let stream = reader.into_stream();
     pin_mut!(stream);
 
-    assert_eq!(stream.next().await, Some(Ok(JsValue::from("Hello"))));
-    assert_eq!(stream.next().await, Some(Ok(JsValue::from("world!"))));
+    assert_eq!(stream.next().await, Some(Ok(JsStringWrapper::from("Hello"))));
+    assert_eq!(stream.next().await, Some(Ok(JsStringWrapper::from("world!"))));
     assert_eq!(stream.next().await, None);
 }
 

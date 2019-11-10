@@ -12,17 +12,17 @@ use super::ReadableStreamDefaultReader;
 use super::sys::ReadableStreamReadResult;
 
 #[must_use = "streams do nothing unless polled"]
-pub struct IntoStream<'reader> {
-    reader: Option<ReadableStreamDefaultReader<'reader>>,
+pub struct IntoStream<'reader, T: From<JsValue> + AsRef<JsValue> + 'static = JsValue> {
+    reader: Option<ReadableStreamDefaultReader<'reader, T>>,
     fut: Option<JsFuture>,
 }
 
-impl<'reader> IntoStream<'reader> {
-    unsafe_unpinned!(reader: Option<ReadableStreamDefaultReader<'reader>>);
+impl<'reader, T: From<JsValue> + AsRef<JsValue> + 'static> IntoStream<'reader, T> {
+    unsafe_unpinned!(reader: Option<ReadableStreamDefaultReader<'reader, T>>);
     unsafe_pinned!(fut: Option<JsFuture>);
 
     #[inline]
-    pub(super) fn new(reader: ReadableStreamDefaultReader) -> IntoStream {
+    pub(super) fn new(reader: ReadableStreamDefaultReader<'_, T>) -> IntoStream<T> {
         IntoStream {
             reader: Some(reader),
             fut: None,
@@ -36,8 +36,8 @@ impl FusedStream for IntoStream<'_> {
     }
 }
 
-impl<'reader> Stream for IntoStream<'reader> {
-    type Item = Result<JsValue, JsValue>;
+impl<'reader, T: From<JsValue> + AsRef<JsValue> + 'static> Stream for IntoStream<'reader, T> {
+    type Item = Result<T, JsValue>;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
@@ -71,7 +71,7 @@ impl<'reader> Stream for IntoStream<'reader> {
                     *self.as_mut().reader() = None;
                     None
                 } else {
-                    Some(Ok(result.value()))
+                    Some(Ok(T::from(result.value())))
                 }
             }
             Err(js_value) => {
