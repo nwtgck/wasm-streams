@@ -20,8 +20,8 @@ async fn test_writable_stream_new() {
     assert!(!writable.is_locked());
 
     let mut writer = writable.get_writer().unwrap();
-    assert_eq!(writer.write(JsValue::from("Hello")).await.unwrap(), ());
-    assert_eq!(writer.write(JsValue::from("world!")).await.unwrap(), ());
+    assert_eq!(writer.write("Hello".into()).await.unwrap(), ());
+    assert_eq!(writer.write("world!".into()).await.unwrap(), ());
     assert_eq!(writer.close().await.unwrap(), ());
     writer.closed().await.unwrap();
 }
@@ -34,7 +34,7 @@ async fn test_writable_stream_into_sink() {
     let writer = writable.get_writer().unwrap();
     let sink = writer.into_sink();
     pin_mut!(sink);
-    assert_eq!(sink.send(JsString::from("Hello")).await, Ok(()));
-    assert_eq!(sink.send(JsString::from("world!")).await, Ok(()));
+    assert_eq!(sink.send("Hello".into()).await, Ok(()));
+    assert_eq!(sink.send("world!".into()).await, Ok(()));
     assert_eq!(sink.close().await, Ok(()));
 }

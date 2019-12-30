@@ -18,8 +18,8 @@ async fn test_transform_stream_new() {
         async {
             let mut writable = transform.writable();
             let mut writer = writable.get_writer().unwrap();
-            writer.write(JsString::from("Hello")).await.unwrap();
-            writer.write(JsString::from("world!")).await.unwrap();
+            writer.write("Hello".into()).await.unwrap();
+            writer.write("world!".into()).await.unwrap();
             writer.close().await.unwrap();
         },
         async {
@@ -41,8 +41,8 @@ async fn test_transform_stream_new_uppercase() {
         async {
             let mut writable = transform.writable();
             let mut writer = writable.get_writer().unwrap();
-            writer.write(JsString::from("Hello")).await.unwrap();
-            writer.write(JsString::from("world!")).await.unwrap();
+            writer.write("Hello".into()).await.unwrap();
+            writer.write("world!".into()).await.unwrap();
             writer.close().await.unwrap();
         },
         async {
