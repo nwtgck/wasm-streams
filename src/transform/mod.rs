@@ -27,7 +27,7 @@ where
         ReadableStream::from(self.raw.readable())
     }
 
-    pub fn writable(&self) -> WritableStream {
+    pub fn writable(&self) -> WritableStream<I> {
         WritableStream::from(self.raw.writable())
     }
 

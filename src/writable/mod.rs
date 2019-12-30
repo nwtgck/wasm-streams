@@ -8,11 +8,12 @@ pub use into_sink::IntoSink;
 mod into_sink;
 pub mod sys;
 
-pub struct WritableStream {
+pub struct WritableStream<T> {
     raw: sys::WritableStream,
+    _item_type: PhantomData<T>,
 }
 
-impl WritableStream {
+impl<T: Into<JsValue>> WritableStream<T> {
     #[inline]
     pub fn as_raw(&self) -> &sys::WritableStream {
         &self.raw
@@ -34,7 +35,7 @@ impl WritableStream {
         Ok(())
     }
 
-    pub fn get_writer(&mut self) -> Result<WritableStreamDefaultWriter<'_>, JsValue> {
+    pub fn get_writer(&mut self) -> Result<WritableStreamDefaultWriter<'_, T>, JsValue> {
         Ok(WritableStreamDefaultWriter {
             raw: Some(self.raw.get_writer()?),
             _stream: PhantomData,
@@ -46,18 +47,21 @@ impl WritableStream {
     }
 }
 
-impl From<sys::WritableStream> for WritableStream {
-    fn from(raw: sys::WritableStream) -> WritableStream {
-        WritableStream { raw }
+impl<T: Into<JsValue>> From<sys::WritableStream> for WritableStream<T> {
+    fn from(raw: sys::WritableStream) -> WritableStream<T> {
+        WritableStream {
+            raw,
+            _item_type: PhantomData,
+        }
     }
 }
 
-pub struct WritableStreamDefaultWriter<'stream> {
+pub struct WritableStreamDefaultWriter<'stream, T> {
     raw: Option<sys::WritableStreamDefaultWriter>,
-    _stream: PhantomData<&'stream mut WritableStream>,
+    _stream: PhantomData<&'stream mut WritableStream<T>>,
 }
 
-impl<'stream> WritableStreamDefaultWriter<'stream> {
+impl<'stream, T> WritableStreamDefaultWriter<'stream, T> {
     #[inline]
     pub fn as_raw(&self) -> &sys::WritableStreamDefaultWriter {
         self.raw.as_ref().unwrap()
@@ -91,12 +95,6 @@ impl<'stream> WritableStreamDefaultWriter<'stream> {
         Ok(())
     }
 
-    pub async fn write(&mut self, chunk: JsValue) -> Result<(), JsValue> {
-        let js_value = JsFuture::from(self.as_raw().write(chunk)).await?;
-        debug_assert!(js_value.is_undefined());
-        Ok(())
-    }
-
     pub async fn close(&mut self) -> Result<(), JsValue> {
         let js_value = JsFuture::from(self.as_raw().close()).await?;
         debug_assert!(js_value.is_undefined());
@@ -110,13 +108,21 @@ impl<'stream> WritableStreamDefaultWriter<'stream> {
         }
         Ok(())
     }
+}
 
-    pub fn into_sink(self) -> IntoSink<'stream> {
+impl<'stream, T: Into<JsValue>> WritableStreamDefaultWriter<'stream, T> {
+    pub async fn write(&mut self, chunk: T) -> Result<(), JsValue> {
+        let js_value = JsFuture::from(self.as_raw().write(chunk.into())).await?;
+        debug_assert!(js_value.is_undefined());
+        Ok(())
+    }
+
+    pub fn into_sink(self) -> IntoSink<'stream, T> {
         IntoSink::new(self)
     }
 }
 
-impl Drop for WritableStreamDefaultWriter<'_> {
+impl<T> Drop for WritableStreamDefaultWriter<'_, T> {
     fn drop(&mut self) {
         // TODO Error handling?
         self.release_lock().unwrap();

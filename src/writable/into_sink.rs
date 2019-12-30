@@ -10,21 +10,21 @@ use wasm_bindgen_futures::JsFuture;
 
 use super::WritableStreamDefaultWriter;
 
-pub struct IntoSink<'writer> {
-    writer: Option<WritableStreamDefaultWriter<'writer>>,
+pub struct IntoSink<'writer, T> {
+    writer: Option<WritableStreamDefaultWriter<'writer, T>>,
     ready_fut: Option<JsFuture>,
     write_fut: Option<JsFuture>,
     close_fut: Option<JsFuture>,
 }
 
-impl<'writer> IntoSink<'writer> {
-    unsafe_unpinned!(writer: Option<WritableStreamDefaultWriter<'writer>>);
+impl<'writer, T: Into<JsValue>> IntoSink<'writer, T> {
+    unsafe_unpinned!(writer: Option<WritableStreamDefaultWriter<'writer, T>>);
     unsafe_pinned!(ready_fut: Option<JsFuture>);
     unsafe_pinned!(write_fut: Option<JsFuture>);
     unsafe_pinned!(close_fut: Option<JsFuture>);
 
     #[inline]
-    pub(super) fn new(writer: WritableStreamDefaultWriter) -> IntoSink {
+    pub(super) fn new(writer: WritableStreamDefaultWriter<T>) -> IntoSink<T> {
         IntoSink {
             writer: Some(writer),
             ready_fut: None,
@@ -34,7 +34,7 @@ impl<'writer> IntoSink<'writer> {
     }
 }
 
-impl<'writer> Sink<JsValue> for IntoSink<'writer> {
+impl<'writer, T: Into<JsValue>> Sink<T> for IntoSink<'writer, T> {
     type Error = JsValue;
 
     fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -72,10 +72,10 @@ impl<'writer> Sink<JsValue> for IntoSink<'writer> {
         })
     }
 
-    fn start_send(mut self: Pin<&mut Self>, item: JsValue) -> Result<(), Self::Error> {
+    fn start_send(mut self: Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
         match self.as_ref().writer.as_ref() {
             Some(writer) => {
-                let fut = JsFuture::from(writer.as_raw().write(item));
+                let fut = JsFuture::from(writer.as_raw().write(item.into()));
                 // Set or replace the pending write future
                 self.as_mut().write_fut().set(Some(fut));
                 Ok(())
