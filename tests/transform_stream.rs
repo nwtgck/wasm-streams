@@ -1,4 +1,5 @@
 use futures::future::join;
+use js_sys::JsString;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::*;
 
@@ -12,7 +13,7 @@ extern "C" {
 
 #[wasm_bindgen_test]
 async fn test_transform_stream_new() {
-    let transform = TransformStream::from(new_noop_transform_stream());
+    let transform: TransformStream<JsString, JsString> = From::from(new_noop_transform_stream());
     join(
         async {
             let mut writable = transform.writable();
@@ -24,8 +25,8 @@ async fn test_transform_stream_new() {
         async {
             let mut readable = transform.readable();
             let mut reader = readable.get_reader().unwrap();
-            assert_eq!(reader.read().await.unwrap(), Some(JsValue::from("Hello")));
-            assert_eq!(reader.read().await.unwrap(), Some(JsValue::from("world!")));
+            assert_eq!(reader.read().await.unwrap(), Some(JsString::from("Hello")));
+            assert_eq!(reader.read().await.unwrap(), Some(JsString::from("world!")));
             assert_eq!(reader.read().await.unwrap(), None);
         },
     )
@@ -34,7 +35,8 @@ async fn test_transform_stream_new() {
 
 #[wasm_bindgen_test]
 async fn test_transform_stream_new_uppercase() {
-    let transform = TransformStream::from(new_uppercase_transform_stream());
+    let transform: TransformStream<JsString, JsString> =
+        From::from(new_uppercase_transform_stream());
     join(
         async {
             let mut writable = transform.writable();
@@ -46,8 +48,8 @@ async fn test_transform_stream_new_uppercase() {
         async {
             let mut readable = transform.readable();
             let mut reader = readable.get_reader().unwrap();
-            assert_eq!(reader.read().await.unwrap(), Some(JsValue::from("HELLO")));
-            assert_eq!(reader.read().await.unwrap(), Some(JsValue::from("WORLD!")));
+            assert_eq!(reader.read().await.unwrap(), Some(JsString::from("HELLO")));
+            assert_eq!(reader.read().await.unwrap(), Some(JsString::from("WORLD!")));
             assert_eq!(reader.read().await.unwrap(), None);
         },
     )

@@ -8,11 +8,12 @@ pub use into_stream::IntoStream;
 mod into_stream;
 pub mod sys;
 
-pub struct ReadableStream {
+pub struct ReadableStream<T> {
     raw: sys::ReadableStream,
+    _item_type: PhantomData<T>,
 }
 
-impl ReadableStream {
+impl<T: From<JsValue>> ReadableStream<T> {
     #[inline]
     pub fn as_raw(&self) -> &sys::ReadableStream {
         &self.raw
@@ -34,7 +35,7 @@ impl ReadableStream {
         Ok(())
     }
 
-    pub fn get_reader(&mut self) -> Result<ReadableStreamDefaultReader<'_>, JsValue> {
+    pub fn get_reader(&mut self) -> Result<ReadableStreamDefaultReader<'_, T>, JsValue> {
         Ok(ReadableStreamDefaultReader {
             raw: Some(self.raw.get_reader()?),
             _stream: PhantomData,
@@ -46,18 +47,21 @@ impl ReadableStream {
     }
 }
 
-impl From<sys::ReadableStream> for ReadableStream {
-    fn from(raw: sys::ReadableStream) -> ReadableStream {
-        ReadableStream { raw }
+impl<T: From<JsValue>> From<sys::ReadableStream> for ReadableStream<T> {
+    fn from(raw: sys::ReadableStream) -> ReadableStream<T> {
+        ReadableStream {
+            raw,
+            _item_type: PhantomData,
+        }
     }
 }
 
-pub struct ReadableStreamDefaultReader<'stream> {
+pub struct ReadableStreamDefaultReader<'stream, T> {
     raw: Option<sys::ReadableStreamDefaultReader>,
-    _stream: PhantomData<&'stream mut ReadableStream>,
+    _stream: PhantomData<&'stream mut ReadableStream<T>>,
 }
 
-impl<'stream> ReadableStreamDefaultReader<'stream> {
+impl<'stream, T> ReadableStreamDefaultReader<'stream, T> {
     #[inline]
     pub fn as_raw(&self) -> &sys::ReadableStreamDefaultReader {
         self.raw.as_ref().unwrap()
@@ -81,16 +85,6 @@ impl<'stream> ReadableStreamDefaultReader<'stream> {
         Ok(())
     }
 
-    pub async fn read(&mut self) -> Result<Option<JsValue>, JsValue> {
-        let js_value = JsFuture::from(self.as_raw().read()).await?;
-        let result = sys::ReadableStreamReadResult::from(js_value);
-        if result.is_done() {
-            Ok(None)
-        } else {
-            Ok(Some(result.value()))
-        }
-    }
-
     pub fn release_lock(&mut self) -> Result<(), JsValue> {
         if let Some(raw) = self.raw.as_ref() {
             raw.release_lock()?;
@@ -98,13 +92,25 @@ impl<'stream> ReadableStreamDefaultReader<'stream> {
         }
         Ok(())
     }
+}
 
-    pub fn into_stream(self) -> IntoStream<'stream> {
+impl<'stream, T: From<JsValue>> ReadableStreamDefaultReader<'stream, T> {
+    pub async fn read(&mut self) -> Result<Option<T>, JsValue> {
+        let js_value = JsFuture::from(self.as_raw().read()).await?;
+        let result = sys::ReadableStreamReadResult::from(js_value);
+        if result.is_done() {
+            Ok(None)
+        } else {
+            Ok(Some(T::from(result.value())))
+        }
+    }
+
+    pub fn into_stream(self) -> IntoStream<'stream, T> {
         IntoStream::new(self)
     }
 }
 
-impl Drop for ReadableStreamDefaultReader<'_> {
+impl<T> Drop for ReadableStreamDefaultReader<'_, T> {
     fn drop(&mut self) {
         // TODO Error handling?
         self.release_lock().unwrap();
