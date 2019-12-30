@@ -19,6 +19,11 @@ impl<T: Into<JsValue>> WritableStream<T> {
         &self.raw
     }
 
+    #[inline]
+    pub fn into_raw(self) -> sys::ReadableStream {
+        self.raw
+    }
+
     pub fn is_locked(&self) -> bool {
         self.raw.is_locked()
     }
@@ -40,10 +45,6 @@ impl<T: Into<JsValue>> WritableStream<T> {
             raw: Some(self.raw.get_writer()?),
             _stream: PhantomData,
         })
-    }
-
-    pub fn into_raw(self) -> sys::WritableStream {
-        self.raw
     }
 }
 

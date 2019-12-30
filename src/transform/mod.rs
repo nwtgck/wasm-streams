@@ -23,16 +23,17 @@ where
         &self.raw
     }
 
+    #[inline]
+    pub fn into_raw(self) -> sys::TransformStream {
+        self.raw
+    }
+
     pub fn readable(&self) -> ReadableStream<O> {
         ReadableStream::from(self.raw.readable())
     }
 
     pub fn writable(&self) -> WritableStream<I> {
         WritableStream::from(self.raw.writable())
-    }
-
-    pub fn into_raw(self) -> sys::TransformStream {
-        self.raw
     }
 }
 

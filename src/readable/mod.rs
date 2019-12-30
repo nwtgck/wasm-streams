@@ -19,6 +19,11 @@ impl<T: From<JsValue>> ReadableStream<T> {
         &self.raw
     }
 
+    #[inline]
+    pub fn into_raw(self) -> sys::ReadableStream {
+        self.raw
+    }
+
     pub fn is_locked(&self) -> bool {
         self.raw.is_locked()
     }
@@ -40,10 +45,6 @@ impl<T: From<JsValue>> ReadableStream<T> {
             raw: Some(self.raw.get_reader()?),
             _stream: PhantomData,
         })
-    }
-
-    pub fn into_raw(self) -> sys::ReadableStream {
-        self.raw
     }
 }
 
