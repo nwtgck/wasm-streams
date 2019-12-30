@@ -13,7 +13,7 @@ pub struct ReadableStream<T> {
     _item_type: PhantomData<T>,
 }
 
-impl<T: From<JsValue>> ReadableStream<T> {
+impl<T> ReadableStream<T> {
     #[inline]
     pub fn as_raw(&self) -> &sys::ReadableStream {
         &self.raw
@@ -39,7 +39,9 @@ impl<T: From<JsValue>> ReadableStream<T> {
         debug_assert!(js_value.is_undefined());
         Ok(())
     }
+}
 
+impl<T: From<JsValue>> ReadableStream<T> {
     pub fn get_reader(&mut self) -> Result<ReadableStreamDefaultReader<'_, T>, JsValue> {
         Ok(ReadableStreamDefaultReader {
             raw: Some(self.raw.get_reader()?),

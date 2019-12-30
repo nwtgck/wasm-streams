@@ -13,14 +13,14 @@ pub struct WritableStream<T> {
     _item_type: PhantomData<T>,
 }
 
-impl<T: Into<JsValue>> WritableStream<T> {
+impl<T> WritableStream<T> {
     #[inline]
     pub fn as_raw(&self) -> &sys::WritableStream {
         &self.raw
     }
 
     #[inline]
-    pub fn into_raw(self) -> sys::ReadableStream {
+    pub fn into_raw(self) -> sys::WritableStream {
         self.raw
     }
 
@@ -39,7 +39,9 @@ impl<T: Into<JsValue>> WritableStream<T> {
         debug_assert!(js_value.is_undefined());
         Ok(())
     }
+}
 
+impl<T: Into<JsValue>> WritableStream<T> {
     pub fn get_writer(&mut self) -> Result<WritableStreamDefaultWriter<'_, T>, JsValue> {
         Ok(WritableStreamDefaultWriter {
             raw: Some(self.raw.get_writer()?),

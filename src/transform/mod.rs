@@ -13,11 +13,7 @@ pub struct TransformStream<I, O> {
     _readable_type: PhantomData<O>,
 }
 
-impl<I, O> TransformStream<I, O>
-where
-    I: Into<JsValue>,
-    O: From<JsValue>,
-{
+impl<I, O> TransformStream<I, O> {
     #[inline]
     pub fn as_raw(&self) -> &sys::TransformStream {
         &self.raw
@@ -27,7 +23,9 @@ where
     pub fn into_raw(self) -> sys::TransformStream {
         self.raw
     }
+}
 
+impl<I: Into<JsValue>, O: From<JsValue>> TransformStream<I, O> {
     pub fn readable(&self) -> ReadableStream<O> {
         ReadableStream::from(self.raw.readable())
     }
@@ -37,11 +35,7 @@ where
     }
 }
 
-impl<I, O> From<sys::TransformStream> for TransformStream<I, O>
-where
-    I: Into<JsValue>,
-    O: From<JsValue>,
-{
+impl<I: Into<JsValue>, O: From<JsValue>> From<sys::TransformStream> for TransformStream<I, O> {
     fn from(raw: sys::TransformStream) -> TransformStream<I, O> {
         TransformStream {
             raw,
